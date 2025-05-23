@@ -35,6 +35,27 @@ function restoreState(state){
 }
 const safeNum=(v,def)=>{const n=parseFloat(v);return Number.isFinite(n)?n:def;};
 const clamp=(v,min,max)=>Math.min(max,Math.max(min,v));
+
+function roofHeight(){
+  const half=model.W/2;
+  if(model.roofMode==='fixed') return Math.sqrt(Math.max(model.side**2-half**2,0));
+  return Math.tan(rad(model.angle))*half;
+}
+
+function getNodes(){
+  const h=roofHeight();
+  const half=model.W/2;
+  return {
+    lf:{x:0,y:0,z:0},
+    rf:{x:model.W,y:0,z:0},
+    lb:{x:0,y:model.D,z:0},
+    rb:{x:model.W,y:model.D,z:0},
+    af:{x:half,y:0,z:h},
+    ab:{x:half,y:model.D,z:h},
+    supports:model.supports.slice().sort((a,b)=>a-b)
+      .map(x=>({x,y:0,z:0}))
+  };
+}
 function drawGrid(layer,stage,scaleX,scaleY,pad,step=0.1){
   const w=stage.width()-pad*2;
   const h=stage.height()-pad*2;
@@ -124,19 +145,16 @@ function updateFront(){
   layer.destroyChildren();
   const pad=20; // отступ
   drawGrid(layer,stage,(stage.width()-2*pad)/model.W,null,pad);
-  // Координаты оснований и вершины в метрах
-  const half=model.W/2;
-  let h; // высота крыши (м)
-  if(model.roofMode==='fixed') h=Math.sqrt(Math.max(model.side**2-half**2,0));
-  else h=Math.tan(rad(model.angle))*half;
+  const nodes=getNodes();
+  const h=roofHeight();
   // Холст‑scale: помещаем по ширине с паддингом
   const scale=(stage.width()-2*pad)/model.W;
   const baseY=stage.height()-pad;
   // базовые узлы
   const leftX=pad;
   const rightX=pad+model.W*scale;
-  const apexX=pad+half*scale;
-  const apexY=baseY-h*scale;
+  const apexX=pad+nodes.af.x*scale;
+  const apexY=baseY-nodes.af.z*scale;
 
   // функция узла
   const makeNode=(x,y,draggable,name)=>{
@@ -209,17 +227,19 @@ function updateSide(){
   const scale=(stage.width()-2*pad)/model.D;
   drawGrid(layer,stage,scale,null,pad);
   const baseY=stage.height()-pad;
-  let h;const half=model.W/2;
-  if(model.roofMode==='fixed') h=Math.sqrt(Math.max(model.side**2-half**2,0));
-  else h=Math.tan(rad(model.angle))*half;
+  const h=roofHeight();
 
   const leftX=pad;
   const rightX=pad+model.D*scale;
   const apexY=baseY-h*scale;
 
   // контур
-  const rect=new Konva.Rect({x:leftX,y:apexY,width:model.D*scale,height:h*scale,stroke:'var(--line)',strokeWidth:2});
-  layer.add(rect);
+  const poly=new Konva.Line({points:[leftX,baseY,leftX,apexY,rightX,apexY,rightX,baseY],closed:true,stroke:'var(--line)',strokeWidth:2});
+  layer.add(poly);
+  const centerX=(leftX+rightX)/2;
+  // обозначаем линии скатов пунктиром
+  layer.add(new Konva.Line({points:[leftX,baseY,centerX,apexY],stroke:'var(--line)',strokeWidth:1,dash:[4,4]}));
+  layer.add(new Konva.Line({points:[rightX,baseY,centerX,apexY],stroke:'var(--line)',strokeWidth:1,dash:[4,4]}));
   // длина глубины label
   const lbl=new Konva.Text({x:(leftX+rightX)/2-20,y:baseY+4,text:model.D.toFixed(2)+' м',fontSize:12,fill:'var(--dim)'});
   layer.add(lbl);
@@ -251,9 +271,7 @@ function updateTop(){
 function calcPipes(){
   const list=[];
   const half=model.W/2;
-  let h;
-  if(model.roofMode==='fixed') h=Math.sqrt(Math.max(model.side**2-half**2,0));
-  else h=Math.tan(rad(model.angle))*half;
+  const h=roofHeight();
   const slope=Math.hypot(half,h);
   // основание (периметр)
   list.push({id:'baseW1',len:model.W});
@@ -288,8 +306,7 @@ function buildPipeUI(){
 function validateModel(){
   const warn=$('warning');
   const half=model.W/2;
-  let h=model.roofMode==='fixed'?Math.sqrt(Math.max(model.side**2-half**2,0)):
-    Math.tan(rad(model.angle))*half;
+  const h=roofHeight();
   const slope=Math.hypot(half,h);
   if(slope<half){
     warn.textContent='Длина ската слишком мала для заданной ширины';
