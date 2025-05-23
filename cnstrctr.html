@@ -25,6 +25,7 @@
   input[type="number"],select{width:100%;padding:0.35rem;border:1px solid var(--border);border-radius:4px}
   #pipeList{margin-top:0.6rem;font-size:0.85rem}
   .pipe{border:1px solid var(--border);border-radius:6px;padding:0.4rem 0.6rem;margin-bottom:0.4rem;background:#fafafa;display:flex;justify-content:space-between}
+  #warning{margin-top:0.8rem;color:#b00;font-size:0.85rem}
   /* ======== Область холстов ========= */
   #stageWrap{flex:1;display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:1rem;padding:1rem;overflow:auto}
   .view{background:#fff;border:1px solid var(--border);border-radius:8px;position:relative}
@@ -62,9 +63,11 @@
 
     <h2>Секция узлов</h2>
     <button id="btnAddSupport" aria-label="Добавить промежуточную стойку" style="width:100%;padding:0.5rem;margin:0.2rem 0;background:var(--green);color:#fff;border:none;border-radius:4px;cursor:pointer">Добавить промежуточную стойку</button>
+    <button id="btnRemoveSupport" aria-label="Удалить стойку" style="width:100%;padding:0.5rem;margin:0.2rem 0;background:#ccc;color:#000;border:none;border-radius:4px;cursor:pointer">Удалить последнюю стойку</button>
 
     <h2>Список труб</h2>
     <div id="pipeList" aria-live="polite"></div>
+    <div id="warning" role="alert"></div>
   </aside>
 
   <!-- ======= ХОЛСТЫ ========= -->
@@ -115,6 +118,7 @@ function restoreState(state){
   updateAll(false);
 }
 const safeNum=(v,def)=>{const n=parseFloat(v);return Number.isFinite(n)?n:def;};
+const clamp=(v,min,max)=>Math.min(max,Math.max(min,v));
 function drawGrid(layer,stage,scaleX,scaleY,pad,step=0.1){
   const w=stage.width()-pad*2;
   const h=stage.height()-pad*2;
@@ -141,10 +145,10 @@ function refreshInputs(){
   $('fixedBox').style.display=model.roofMode==='fixed'?'block':'none';
   $('angleBox').style.display=model.roofMode==='angle'?'block':'none';
 }
-$('inpWidth').oninput=e=>{model.W=safeNum(e.target.value,model.W);updateAll();};
-$('inpDepth').oninput=e=>{model.D=safeNum(e.target.value,model.D);updateAll();};
-$('inpSide').oninput=e=>{model.side=safeNum(e.target.value,model.side);updateAll();};
-$('inpAngle').oninput=e=>{model.angle=safeNum(e.target.value,model.angle);updateAll();};
+$('inpWidth').oninput=e=>{model.W=clamp(safeNum(e.target.value,model.W),1,10);updateAll();};
+$('inpDepth').oninput=e=>{model.D=clamp(safeNum(e.target.value,model.D),1,10);updateAll();};
+$('inpSide').oninput=e=>{model.side=clamp(safeNum(e.target.value,model.side),0.1,10);updateAll();};
+$('inpAngle').oninput=e=>{model.angle=clamp(safeNum(e.target.value,model.angle),5,60);updateAll();};
 $('roofMode').onchange=e=>{
   model.roofMode=e.target.value;
   $('fixedBox').style.display=model.roofMode==='fixed'?'block':'none';
@@ -155,6 +159,10 @@ $('btnAddSupport').onclick=()=>{
   // Добавляем стойку посередине проекции спереди
   const x=model.W/2;
   if(!model.supports.includes(x)) model.supports.push(x);
+  updateAll();
+};
+$('btnRemoveSupport').onclick=()=>{
+  model.supports.pop();
   updateAll();
 };
 
@@ -216,20 +224,18 @@ function updateFront(){
 
   // функция узла
   const makeNode=(x,y,draggable,name)=>{
-    const c=new Konva.Circle({x,y,r:5,fill:'var(--node)',draggable});
+    const c=new Konva.Circle({x,y,r:5,fill:'var(--node)',draggable,name});
     layer.add(c);
     if(draggable){
       c.on('dragmove',()=>{
         if(name==='apex'){
-          // apex只能 вверх/вниз по Y (сохраняем симметрию)
           c.x(apexX);
-          // ограничение высоты >=0
           const stepPx=scale*0.1;
           let y=Math.min(baseY-20,c.y());
           y=baseY-Math.round((baseY-y)/stepPx)*stepPx;
           c.y(y);
+          updateModelFromFront();
         }
-        updateModelFromFront();
       });
       c.on('dragend',pushHistory);
       c.on('mouseenter',()=>stage.container().style.cursor='grab');
@@ -247,10 +253,29 @@ function updateFront(){
   layer.add(slopeL,slopeR);
   // Вертикальные стойки основания + промежуточные
   const supports=[0,...model.supports.sort((a,b)=>a-b),model.W];
-  supports.forEach(xm=>{
+  const getTopY=xm=>{
+    if(xm<=half)return baseY-(h*(xm/half))*scale;
+    return baseY-(h*((model.W-xm)/half))*scale;
+  };
+  supports.forEach((xm,i)=>{
     const x=pad+xm*scale;
-    const post=new Konva.Line({points:[x,baseY,x,baseY],stroke:'var(--line)',strokeWidth:2});
+    const topY=getTopY(xm);
+    const post=new Konva.Line({points:[x,baseY,x,topY],stroke:'var(--line)',strokeWidth:2});
     layer.add(post);
+    if(i>0 && i<supports.length-1){
+      const n=makeNode(x,baseY,true,'support'+i);
+      n.on('dragmove',()=>{
+        let nx=Math.min(model.W,Math.max(0,(n.x()-pad)/scale));
+        const stepPx=scale*0.1;
+        const px=pad+Math.round(nx*scale/stepPx)*stepPx;
+        n.x(px);
+        post.points([px,baseY,px,getTopY(nx)]);
+      });
+      n.on('dragend',()=>{
+        model.supports[i-1]=clamp((n.x()-pad)/scale,0,model.W);
+        updateAll();
+      });
+    }
   });
   // Длина ската label
   const len=model.roofMode==='fixed'?model.side:Math.hypot(model.W/2,h);
@@ -344,12 +369,23 @@ function buildPipeUI(){
   });
 }
 
+function validateModel(){
+  const warn=$('warning');
+  const half=model.W/2;
+  let h=model.roofMode==='fixed'?Math.sqrt(Math.max(model.side**2-half**2,0)):
+    Math.tan(rad(model.angle))*half;
+  const slope=Math.hypot(half,h);
+  if(slope<half){
+    warn.textContent='Длина ската слишком мала для заданной ширины';
+  }else warn.textContent='';
+}
+
 /* =========================================================
    ОТНОШЕНИЕ ПЕРЕМЕЩЕНИЯ APEX → модель
    ========================================================= */
 function updateModelFromFront(){
   const {stage,layer}=stages.front;
-  const apex=layer.findOne('Circle'); // первый draggable — apex
+  const apex=layer.findOne('.apex');
   if(!apex) return;
   const pad=20;
   const scale=(stage.width()-2*pad)/model.W;
@@ -378,6 +414,7 @@ function updateAll(log=true){
   updateSide();
   updateTop();
   buildPipeUI();
+  validateModel();
   if(log) pushHistory();
 }
 updateAll(false);
