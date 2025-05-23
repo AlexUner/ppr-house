@@ -147,6 +147,7 @@ function updateFront(){
   drawGrid(layer,stage,(stage.width()-2*pad)/model.W,null,pad);
   const nodes=getNodes();
   const h=roofHeight();
+  const half=model.W/2;
   // Холст‑scale: помещаем по ширине с паддингом
   const scale=(stage.width()-2*pad)/model.W;
   const baseY=stage.height()-pad;
