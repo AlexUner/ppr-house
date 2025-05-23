@@ -1,0 +1,63 @@
+<!--
+  Конструктор навеса из PPR‑труб v2
+  Обновлено: интерактивные узлы, динамические размеры, улучшенный UX/UI
+-->
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<title>Конструктор навеса из PPR‑труб</title>
+<!-- Konva.js для интерактивной графики -->
+<script src="https://unpkg.com/konva@8.4.3/konva.min.js"></script>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<h1>Конструктор навеса из PPR‑труб</h1>
+<div id="app">
+  <!-- ======= ПАНЕЛЬ =========== -->
+  <aside id="sidebar">
+    <h2>Параметры основания</h2>
+    <label for="inpWidth">Ширина (м)</label>
+    <input aria-label="Ширина основания" type="number" id="inpWidth" min="1" max="10" step="0.1" value="2">
+    <label for="inpDepth">Глубина (м)</label>
+    <input aria-label="Глубина основания" type="number" id="inpDepth" min="1" max="10" step="0.1" value="3">
+
+    <h2>Параметры крыши</h2>
+    <label for="roofMode">Фиксация скатов</label>
+    <select id="roofMode">
+      <option value="fixed">По длине стороны</option>
+      <option value="angle">По углу</option>
+    </select>
+    <div id="fixedBox">
+      <label for="inpSide">Длина ската (м)</label>
+      <input aria-label="Длина ската" type="number" id="inpSide" min="1" max="10" step="0.1" value="2">
+    </div>
+    <div id="angleBox" style="display:none">
+      <label for="inpAngle">Угол ската (°)</label>
+      <input aria-label="Угол ската" type="number" id="inpAngle" min="5" max="60" step="1" value="15">
+    </div>
+
+    <h2>Секция узлов</h2>
+    <button id="btnAddSupport" aria-label="Добавить промежуточную стойку" style="width:100%;padding:0.5rem;margin:0.2rem 0;background:var(--green);color:#fff;border:none;border-radius:4px;cursor:pointer">Добавить промежуточную стойку</button>
+    <button id="btnRemoveSupport" aria-label="Удалить стойк" style="width:100%;padding:0.5rem;margin:0.2rem 0;background:#ccc;color:#000;border:none;border-radius:4px;cursor:pointer">Удалить последнюю стойку</button>
+
+    <h2>Список труб</h2>
+    <div id="pipeList" aria-live="polite"></div>
+    <div id="warning" role="alert"></div>
+  </aside>
+
+  <!-- ======= ХОЛСТЫ ========= -->
+  <section id="stageWrap">
+    <div class="view"><div id="frontView"></div><span class="caption">Вид спереди</span></div>
+    <div class="view"><div id="sideView"></div><span class="caption">Вид сбоку</span></div>
+    <div class="view"><div id="topView"></div><span class="caption">Вид сверху</span></div>
+  </section>
+</div>
+
+<!-- ======= Шаблон всплывающей подсказки (будет клонироваться) -->
+<div id="tooltip" class="tooltip" style="display:none"></div>
+
+<script src="main.js"></script>
+</body>
+</html>
+
